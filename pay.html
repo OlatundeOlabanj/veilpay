@@ -444,7 +444,7 @@
 
       // If already paid, show success
       if (invoice.status === 'paid' && invoice.txHash) {
-        showSuccessState(invoice.txHash);
+        showSuccessState(invoice.txHash, `https://solscan.io/tx/${invoice.txHash}?cluster=devnet`);
       }
     });
 
@@ -514,9 +514,10 @@
 
       try {
         const result = await MagicBlock.executePrivatePayment({
-          paymentId:   currentInvoice.paymentId || currentInvoice.id,
-          payerWallet: payerWallet.publicKey,
-          amount:      currentInvoice.amount,
+          paymentId:       currentInvoice.paymentId || currentInvoice.id,
+          payerWallet:     payerWallet.publicKey,
+          recipientWallet: currentInvoice.recipientWallet,
+          amount:          currentInvoice.amount,
         });
 
         currentTxHash = result.txHash;
@@ -533,7 +534,7 @@
         // Update status badge
         document.getElementById('detailStatus').innerHTML = VeilPay.statusBadge('paid');
 
-        showSuccessState(result.txHash);
+        showSuccessState(result.txHash, result.explorerUrl);
         VeilPay.launchConfetti();
         VeilPay.showToast('Payment confirmed on Solana!', 'green', 5000);
 
@@ -546,10 +547,10 @@
       }
     }
 
-    function showSuccessState(txHash) {
+    function showSuccessState(txHash, explorerUrl) {
       document.getElementById('txHashDisplay').textContent = txHash;
       document.getElementById('explorerLink').href =
-        `https://solscan.io/tx/${txHash}?cluster=devnet`;
+        explorerUrl || `https://solscan.io/tx/${txHash}?cluster=devnet`;
       showState('stateSuccess');
     }
 
