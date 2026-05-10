@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VeilPay — Private Freelance Payments on Solana</title>
+  <meta name="description" content="Invoice privately. Get paid on Solana. VeilPay uses MagicBlock Private Payments to shield your wallet balance and transaction history." />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ── Landing-specific styles ── */
+
+    /* Animated dot grid background */
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .hero-bg::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle, rgba(245,158,11,0.08) 1px, transparent 1px);
+      background-size: 32px 32px;
+      animation: gridShift 20s linear infinite;
+    }
+
+    .hero-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 50% at 50% 40%, rgba(245,158,11,0.06) 0%, transparent 70%);
+    }
+
+    @keyframes gridShift {
+      0%   { background-position: 0 0; }
+      100% { background-position: 32px 32px; }
+    }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      min-height: 92vh;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 720px;
+      padding: 6rem 0 5rem;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border: 1px solid rgba(245,158,11,0.25);
+      padding: 0.35rem 0.85rem;
+      border-radius: 100px;
+      margin-bottom: 1.75rem;
+      animation: fadeUp 0.6s ease both;
+    }
+
+    .hero h1 {
+      margin-bottom: 1.25rem;
+      animation: fadeUp 0.6s 0.1s ease both;
+    }
+
+    .hero h1 span { color: var(--accent); }
+
+    .hero p {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 560px;
+      line-height: 1.75;
+      margin-bottom: 2.25rem;
+      animation: fadeUp 0.6s 0.2s ease both;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      animation: fadeUp 0.6s 0.3s ease both;
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 2.5rem;
+      margin-top: 3.5rem;
+      flex-wrap: wrap;
+      animation: fadeUp 0.6s 0.4s ease both;
+    }
+
+    .hero-stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+      font-family: var(--font-mono);
+      letter-spacing: -0.03em;
+    }
+
+    .hero-stat-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .hero-stat-divider {
+      width: 1px;
+      height: 40px;
+      background: var(--border);
+      align-self: center;
+    }
+
+    /* Floating badge */
+    .floating-badge {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      width: 280px;
+      box-shadow: var(--shadow-lg);
+      animation: floatBob 4s ease-in-out infinite;
+      display: none;
+    }
+
+    @media (min-width: 1000px) {
+      .floating-badge { display: block; }
+    }
+
+    @keyframes floatBob {
+      0%, 100% { transform: translateY(-50%) translateY(0); }
+      50%       { transform: translateY(-50%) translateY(-12px); }
+    }
+
+    .fb-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .fb-label { font-size: 0.78rem; color: var(--text-muted); }
+    .fb-status {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--success);
+    }
+
+    .fb-dot {
+      width: 7px; height: 7px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    .fb-amount {
+      font-family: var(--font-mono);
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+
+    .fb-desc { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1rem; }
+
+    .fb-shielded {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--accent-dim);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: var(--radius-sm);
+      font-size: 0.78rem;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* Section: Features */
+    .features { background: var(--bg); }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+      transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(245,158,11,0.35);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(245,158,11,0.08);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(245,158,11,0.25);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .feature-card h3 { margin-bottom: 0.5rem; font-size: 1.1rem; }
+    .feature-card p  { font-size: 0.9rem; line-height: 1.7; }
+
+    /* Section: How It Works */
+    .how-section { background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0;
+      position: relative;
+    }
+
+    @media (min-width: 768px) {
+      .steps-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .step {
+      padding: 2rem 1.5rem;
+      position: relative;
+    }
+
+    .step:not(:last-child) {
+      border-bottom: 1px solid var(--border);
+    }
+
+    @media (min-width: 768px) {
+      .step:not(:last-child) {
+        border-bottom: none;
+        border-right: 1px solid var(--border);
+      }
+    }
+
+    .step-number {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.1em;
+      margin-bottom: 0.75rem;
+    }
+
+    .step h4 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .step p  { font-size: 0.87rem; }
+
+    /* Section labels */
+    .section-eyebrow {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+
+    .section-heading {
+      font-size: clamp(1.6rem, 3vw, 2.25rem);
+      margin-bottom: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .section-sub {
+      font-size: 1rem;
+      color: var(--text-muted);
+      max-width: 560px;
+      margin: 0 auto 3rem;
+    }
+
+    /* Animations */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* CTA bottom */
+    .cta-bottom {
+      text-align: center;
+      padding: 5rem 0;
+      background: var(--bg);
+    }
+
+    .cta-bottom h2 { margin-bottom: 0.75rem; }
+    .cta-bottom p  { margin-bottom: 2rem; }
+
+    .cta-bottom .btn-primary {
+      font-size: 1.05rem;
+      padding: 0.9rem 2.25rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Navbar ── -->
+  <nav class="navbar">
+    <div class="container">
+      <a href="index.html" class="nav-logo">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <rect width="28" height="28" rx="8" fill="#f59e0b" fill-opacity="0.15"/>
+          <path d="M14 5L19 9.5V14.5L14 19L9 14.5V9.5L14 5Z" stroke="#f59e0b" stroke-width="1.5" stroke-linejoin="round"/>
+          <path d="M14 9L17 11.5V15L14 17.5L11 15V11.5L14 9Z" fill="#f59e0b" fill-opacity="0.4"/>
+        </svg>
+        <span class="nav-logo-text">Veil<span>Pay</span></span>
+      </a>
+      <div class="nav-actions">
+        <a href="dashboard.html" class="btn btn-ghost btn-sm hide-mobile">Dashboard</a>
+        <a href="dashboard.html" class="btn btn-primary btn-sm">Create Invoice</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Hero ── -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="container" style="position:relative;z-index:1;">
+      <div class="hero-content">
+        <div class="hero-eyebrow">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          Powered by MagicBlock Private Payments
+        </div>
+        <h1>Invoice privately.<br>Get paid on <span>Solana.</span></h1>
+        <p>VeilPay uses MagicBlock's Private Payments API so your wallet balance and transaction history stay shielded — while payments remain verifiable on-chain.</p>
+        <div class="hero-cta">
+          <a href="dashboard.html" class="btn btn-primary btn-lg">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+            Create Invoice
+          </a>
+          <a href="#features" class="btn btn-ghost btn-lg">
+            Learn More
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </a>
+        </div>
+
+        <div class="hero-stats">
+          <div>
+            <div class="hero-stat-value">&lt;400ms</div>
+            <div class="hero-stat-label">Ephemeral Rollup Finality</div>
+          </div>
+          <div class="hero-stat-divider"></div>
+          <div>
+            <div class="hero-stat-value">~$0.00</div>
+            <div class="hero-stat-label">Transaction Fees at Scale</div>
+          </div>
+          <div class="hero-stat-divider"></div>
+          <div>
+            <div class="hero-stat-value">100%</div>
+            <div class="hero-stat-label">On-chain Verifiable</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Floating invoice preview -->
+      <div class="floating-badge">
+        <div class="fb-header">
+          <span class="fb-label">Invoice #0042</span>
+          <span class="fb-status">
+            <span class="fb-dot"></span>
+            Confirmed
+          </span>
+        </div>
+        <div class="fb-amount">150.00 USDC</div>
+        <div class="fb-desc">Brand identity design — Phase 1</div>
+        <div class="fb-shielded">
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          Shielded via MagicBlock PER
+        </div>
+        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+          <div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:4px;">Tx Hash</div>
+          <div style="font-family:var(--font-mono);font-size:0.7rem;color:var(--text-muted);">5KJp...x8mR</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Features ── -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="text-center">
+        <div class="section-eyebrow">Why VeilPay</div>
+        <h2 class="section-heading">Everything a freelancer needs.<br>Nothing exposed.</h2>
+        <p class="section-sub">Built on Solana + MagicBlock, every payment you receive is private, fast, and fully verifiable.</p>
+      </div>
+
+      <div class="grid-3">
+        <!-- Card 1 -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#f59e0b" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          <h3>Shielded Transactions</h3>
+          <p>Your payment amounts and wallet activity are private by default using MagicBlock's Private Ephemeral Rollups. Clients see confirmation — not your history.</p>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#f59e0b" stroke-width="2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+          </div>
+          <h3>Instant Settlement</h3>
+          <p>Low-latency Solana finality with MagicBlock Ephemeral Rollups. Zero fees at scale mean you keep every cent of every invoice you send.</p>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#f59e0b" stroke-width="2">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+          </div>
+          <h3>Shareable Invoice Links</h3>
+          <p>Generate a unique private payment link for every client. They open it, connect their wallet, and pay — you get notified the moment it confirms.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── How It Works ── -->
+  <section class="how-section" id="how">
+    <div class="container">
+      <div class="text-center" style="padding:3.5rem 0 2.5rem;">
+        <div class="section-eyebrow">How It Works</div>
+        <h2 class="section-heading">Four steps to private payment.</h2>
+      </div>
+      <div class="steps-grid">
+        <div class="step">
+          <div class="step-number">01</div>
+          <h4>Connect Wallet</h4>
+          <p>Link your Phantom wallet to VeilPay in one click. Your keys stay yours — always.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">02</div>
+          <h4>Create Invoice</h4>
+          <p>Enter client details, service description, and the USDC amount. VeilPay generates a shielded payment request.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">03</div>
+          <h4>Share the Link</h4>
+          <p>Copy or share the unique payment link directly with your client via any channel.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">04</div>
+          <h4>Get Paid Privately</h4>
+          <p>Client pays through MagicBlock's shielded rollup. You receive USDC — transaction details stay private.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Bottom CTA ── -->
+  <section class="cta-bottom" id="cta">
+    <div class="container">
+      <div class="section-eyebrow" style="margin-bottom:0.75rem;">Ready to start?</div>
+      <h2>Your clients pay. Your privacy stays.</h2>
+      <p style="max-width:460px;margin:0.75rem auto 2rem;font-size:1rem;">Create your first private invoice in under a minute. No account. No KYC. Just connect and invoice.</p>
+      <a href="dashboard.html" class="btn btn-primary btn-lg">
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        Open Dashboard
+      </a>
+    </div>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <div class="container">
+      <span class="footer-text">VeilPay by TJS Code — Built for Colosseum Hackathon 2026 — Powered by MagicBlock</span>
+      <span class="footer-brand">Made by TJS Code</span>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+  <script src="https://unpkg.com/@magicblock-labs/ephemeral-web3.js@latest/dist/index.umd.js"></script>
+  <script src="magicblock.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
