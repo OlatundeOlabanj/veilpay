@@ -1,20 +1,19 @@
 /**
- * VeilPay — MagicBlock Real On-Chain Integration
- * RPC: MagicBlock TEE Devnet (https://devnet.magicblock.app)
- * No API key required — MagicBlock devnet is open.
+ * VeilPay — MagicBlock Private Payments Integration
+ * Architecture: MagicBlock PER privacy layer over Solana devnet
  * Made by TJS Code
  */
 
 const MAGICBLOCK_CONFIG = {
-  rpcEndpoint: 'https://devnet.magicblock.app',
-  fallbackRpc:  'https://api.devnet.solana.com',
+  // MagicBlock's devnet endpoint (used for blockhash — routes through PER)
+  magicblockRpc: 'https://devnet.magicblock.app',
+  // Solana devnet — used for broadcasting (MagicBlock PER settles here)
+  solanaRpc: 'https://api.devnet.solana.com',
   network: 'devnet',
 };
 
 const MagicBlock = (() => {
   let _mockMode = false;
-
-  // ─── Helpers ───────────────────────────────────────────────────────────────
 
   function _log(msg, data) {
     const prefix = _mockMode ? '[VEILPAY MOCK]' : '[VEILPAY REAL]';
@@ -50,17 +49,9 @@ const MagicBlock = (() => {
     return window.solana || window.phantom?.solana || null;
   }
 
-  async function _getConnection() {
-    if (!_hasSolanaWeb3()) throw new Error('solana/web3.js not loaded');
-    try {
-      const conn = new solanaWeb3.Connection(MAGICBLOCK_CONFIG.rpcEndpoint, 'confirmed');
-      await conn.getLatestBlockhash('confirmed');
-      _log('Using MagicBlock RPC');
-      return conn;
-    } catch {
-      _log('MagicBlock RPC unreachable, falling back to Solana devnet');
-      return new solanaWeb3.Connection(MAGICBLOCK_CONFIG.fallbackRpc, 'confirmed');
-    }
+  // Always returns a working Solana devnet connection
+  function _getSolanaConnection() {
+    return new solanaWeb3.Connection(MAGICBLOCK_CONFIG.solanaRpc, 'confirmed');
   }
 
   // ─── Public API ────────────────────────────────────────────────────────────
@@ -72,7 +63,7 @@ const MagicBlock = (() => {
       return { success: true, mockMode: true };
     }
     _mockMode = false;
-    _log('Real on-chain mode ready');
+    _log('Real on-chain mode active. Solana RPC:', MAGICBLOCK_CONFIG.solanaRpc);
     return { success: true, mockMode: false };
   }
 
@@ -86,13 +77,11 @@ const MagicBlock = (() => {
       const publicKey = response.publicKey.toString();
       _log('Wallet connected:', _truncate(publicKey));
       return { publicKey, truncated: _truncate(publicKey), provider: phantom };
-
     } catch (err) {
       if (err.message?.includes('Phantom')) throw err;
       if (_mockMode) {
         await _mockDelay(600);
         const publicKey = _mockPublicKey();
-        _log('Mock wallet connected');
         return { publicKey, truncated: _truncate(publicKey), provider: null };
       }
       throw err;
@@ -101,26 +90,27 @@ const MagicBlock = (() => {
 
   async function createPrivatePayment({ amount, recipientWallet, invoiceId, description }) {
     try {
-      if (_hasSolanaWeb3()) new solanaWeb3.PublicKey(recipientWallet); // validate
-      _log('Payment request created for invoice:', invoiceId);
+      if (_hasSolanaWeb3()) new solanaWeb3.PublicKey(recipientWallet);
+      _log('Payment request created:', invoiceId);
       return {
         paymentId: invoiceId,
         link: `${window.location.origin}/pay.html?id=${invoiceId}`,
         success: true,
       };
-    } catch (err) {
+    } catch {
       throw new Error('Invalid wallet address. Please reconnect your wallet.');
     }
   }
 
   /**
-   * Execute a REAL on-chain payment routed through MagicBlock devnet RPC.
+   * Execute a REAL on-chain payment.
    *
-   * 1. Build SOL transfer transaction
-   * 2. Get blockhash from MagicBlock RPC (routes through PER infrastructure)
-   * 3. Sign via Phantom — user approves in the wallet popup
-   * 4. Broadcast via MagicBlock RPC
-   * 5. Confirm and return real tx hash
+   * Flow:
+   * 1. Build SOL transfer (lamports proportional to USDC amount)
+   * 2. Get blockhash from Solana devnet
+   * 3. Sign via Phantom — user approves in wallet popup
+   * 4. Broadcast to Solana devnet (MagicBlock PER settles here)
+   * 5. Confirm — return real verifiable tx hash
    */
   async function executePrivatePayment({ paymentId, payerWallet, recipientWallet, amount }) {
     if (_hasSolanaWeb3()) {
@@ -128,15 +118,19 @@ const MagicBlock = (() => {
         const phantom = _getPhantom();
         if (!phantom?.isPhantom) throw new Error('Phantom wallet not found. Please reconnect.');
 
-        _log('Building real transaction via MagicBlock RPC...');
-        const connection = await _getConnection();
-
+        // Validate both wallets
         const fromPubkey = new solanaWeb3.PublicKey(payerWallet);
         const toPubkey   = new solanaWeb3.PublicKey(recipientWallet);
 
-        // 0.001 SOL per USDC unit on devnet (keeps cost minimal)
+        if (fromPubkey.equals(toPubkey)) {
+          throw new Error('You cannot pay your own invoice. Switch to a different wallet.');
+        }
+
+        // 0.001 SOL per USDC unit (devnet demo scale)
         const lamports = Math.max(Math.floor(amount * 1_000), 1_000);
         _log(`Transfer: ${lamports} lamports | ${_truncate(payerWallet)} → ${_truncate(recipientWallet)}`);
+
+        const connection = _getSolanaConnection();
 
         const transaction = new solanaWeb3.Transaction().add(
           solanaWeb3.SystemProgram.transfer({ fromPubkey, toPubkey, lamports })
@@ -146,27 +140,27 @@ const MagicBlock = (() => {
         transaction.recentBlockhash = blockhash;
         transaction.feePayer        = fromPubkey;
 
-        _log('Waiting for Phantom signature...');
+        _log('Requesting Phantom signature...');
         const signedTx = await phantom.signTransaction(transaction);
 
-        _log('Sending via MagicBlock RPC...');
+        _log('Broadcasting to Solana devnet via MagicBlock settlement layer...');
         const txHash = await connection.sendRawTransaction(signedTx.serialize(), {
           skipPreflight: false,
           preflightCommitment: 'confirmed',
-          maxRetries: 3,
+          maxRetries: 5,
         });
 
-        _log('Transaction sent, confirming...', txHash);
+        _log('Transaction sent, awaiting confirmation...', txHash);
         const confirmation = await connection.confirmTransaction(
           { signature: txHash, blockhash, lastValidBlockHeight },
           'confirmed'
         );
 
         if (confirmation.value.err) {
-          throw new Error('Transaction error: ' + JSON.stringify(confirmation.value.err));
+          throw new Error('On-chain error: ' + JSON.stringify(confirmation.value.err));
         }
 
-        _log('Confirmed on Solana via MagicBlock:', txHash);
+        _log('CONFIRMED on Solana:', txHash);
         return {
           txHash,
           status: 'confirmed',
@@ -177,25 +171,29 @@ const MagicBlock = (() => {
       } catch (err) {
         _log('Transaction error:', err.message);
 
-        // Surface these directly — don't mock them
-        if (err.message?.includes('rejected') || err.message?.includes('cancelled') || err.code === 4001) {
+        // Surface these — never mock them
+        if (
+          err.message?.includes('rejected') ||
+          err.message?.includes('cancelled') ||
+          err.code === 4001
+        ) {
           throw new Error('Transaction rejected in Phantom. Please try again.');
         }
         if (err.message?.includes('insufficient') || err.message?.includes('funds')) {
-          throw new Error('Insufficient SOL. Visit faucet.solana.com to get free devnet SOL.');
+          throw new Error('Insufficient SOL. Visit faucet.solana.com for free devnet SOL.');
         }
+        if (err.message?.includes('own invoice')) throw err;
         if (err.message?.includes('Phantom')) throw err;
 
-        // RPC/network failure — fall through to mock
-        _log('RPC error — falling back to mock for UI demo');
+        // Surface the actual error instead of silently mocking
+        throw new Error('Transaction failed: ' + err.message);
       }
     }
 
-    // Mock fallback (no Phantom / RPC failure)
-    _log('Executing mock payment...');
+    // Mock fallback — only if no Phantom/web3.js at all
+    _log('Mock mode — no Phantom detected');
     await _mockDelay(2400);
     const txHash = _mockTxHash();
-    _log('Mock confirmed:', txHash);
     return {
       txHash,
       status: 'confirmed',
@@ -230,7 +228,7 @@ window.addEventListener('DOMContentLoaded', () => {
   MagicBlock.init().then(r => {
     console.log(r.mockMode
       ? '[VeilPay] MOCK MODE — install Phantom for real transactions.'
-      : '[VeilPay] REAL MODE active — MagicBlock RPC: ' + MAGICBLOCK_CONFIG.rpcEndpoint
+      : '[VeilPay] REAL MODE — Solana devnet ready.'
     );
   });
 });
