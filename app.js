@@ -84,7 +84,9 @@ const WalletState = {
 
   set(data) {
     try {
-      sessionStorage.setItem(this._key, JSON.stringify(data));
+      // Only store serializable fields — never the Phantom provider object
+      const safe = { publicKey: data.publicKey, truncated: data.truncated };
+      sessionStorage.setItem(this._key, JSON.stringify(safe));
     } catch (err) {
       console.error('[VeilPay] Failed to save wallet state:', err);
     }

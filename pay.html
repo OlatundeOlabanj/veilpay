@@ -510,6 +510,12 @@
         return;
       }
 
+      // Prevent paying your own invoice
+      if (payerWallet.publicKey === currentInvoice.recipientWallet) {
+        VeilPay.showToast('You cannot pay your own invoice. Switch to a different wallet.', 'red');
+        return;
+      }
+
       showState('stateProcessing');
 
       try {
