@@ -30,6 +30,14 @@ function saveInvoice(invoice) {
       index.unshift(invoice.id); // newest first
       localStorage.setItem(INVOICE_INDEX, JSON.stringify(index));
     }
+    // Write-through to the real backend so the invoice is retrievable
+    // from any device, not just this browser. Fire-and-forget: local
+    // cache above already gives instant UI feedback either way.
+    fetch('/api/invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(invoice)
+    }).catch(err => console.error('[VeilPay] Failed to sync invoice to server:', err));
     return true;
   } catch (err) {
     console.error('[VeilPay] Failed to save invoice:', err);
@@ -37,19 +45,42 @@ function saveInvoice(invoice) {
   }
 }
 
-function getInvoice(id) {
+async function getInvoice(id) {
+  // Try local cache first — instant if this is the device that created it.
+  try {
+    const raw = localStorage.getItem(`${INVOICE_PREFIX}${id}`);
+    if (raw) return JSON.parse(raw);
+  } catch (err) {
+    console.error('[VeilPay] Failed to read invoice from cache:', err);
+  }
+  // Fall back to the real backend — this is what makes invoices work
+  // when opened on a different device than the one that created them.
+  try {
+    const res = await fetch(`/api/invoice?id=${encodeURIComponent(id)}`);
+    if (!res.ok) return null;
+    const invoice = await res.json();
+    // Cache it locally too, so a second view on this device is instant.
+    localStorage.setItem(`${INVOICE_PREFIX}${id}`, JSON.stringify(invoice));
+    return invoice;
+  } catch (err) {
+    console.error('[VeilPay] Failed to fetch invoice from server:', err);
+    return null;
+  }
+}
+
+function getInvoiceLocal(id) {
   try {
     const raw = localStorage.getItem(`${INVOICE_PREFIX}${id}`);
     return raw ? JSON.parse(raw) : null;
   } catch (err) {
-    console.error('[VeilPay] Failed to read invoice:', err);
+    console.error('[VeilPay] Failed to read invoice from cache:', err);
     return null;
   }
 }
 
 function getAllInvoices() {
   const index = getInvoiceIndex();
-  return index.map(id => getInvoice(id)).filter(Boolean);
+  return index.map(id => getInvoiceLocal(id)).filter(Boolean);
 }
 
 function getInvoiceIndex() {
@@ -61,8 +92,8 @@ function getInvoiceIndex() {
   }
 }
 
-function updateInvoiceStatus(id, status, extra = {}) {
-  const invoice = getInvoice(id);
+async function updateInvoiceStatus(id, status, extra = {}) {
+  const invoice = await getInvoice(id);
   if (!invoice) return false;
   Object.assign(invoice, { status, ...extra });
   return saveInvoice(invoice);

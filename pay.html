@@ -265,7 +265,7 @@
       const invoiceId = VeilPay.getURLParam('id');
       if (!invoiceId) { showNotFound(); return; }
 
-      const invoice = VeilPay.getInvoice(invoiceId);
+      const invoice = await VeilPay.getInvoice(invoiceId);
       if (!invoice) { showNotFound(); return; }
 
       currentInvoice = invoice;
@@ -366,7 +366,7 @@
         setStepState('stepTransfer', 'transferSpinner', 'done');
         currentTxHash = result.txHash;
 
-        VeilPay.updateInvoiceStatus(currentInvoice.id, 'paid', {
+        await VeilPay.updateInvoiceStatus(currentInvoice.id, 'paid', {
           txHash: result.txHash,
           depositTxHash: result.depositTxHash,
           paidAt: new Date().toISOString(),
