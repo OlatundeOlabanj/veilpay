@@ -53,6 +53,10 @@ async function submitViaRpcFallback(signedTxBase64) {
 
 exports.handler = async (event) => {
   const headers = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
+  const origin = event.headers?.origin || event.headers?.referer || '';
+  if (origin && !origin.includes('veilpay-tjscode.netlify.app') && !origin.includes('localhost')) {
+    return { statusCode: 403, headers, body: JSON.stringify({ error: 'Forbidden origin.' }) };
+  }
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed. Use POST.' }) };
   }

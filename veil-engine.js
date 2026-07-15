@@ -99,6 +99,37 @@ const VeilEngine = (() => {
   }
 
   /**
+   * SAFETY-CRITICAL: before we're allowed to submit a retry transaction,
+   * we must be certain the previous attempt can never land on-chain later —
+   * otherwise a timeout + retry could silently double-charge the payer.
+   * Solana guarantees a transaction can NEVER confirm once its blockhash
+   * has expired, so we poll isBlockhashValid until that's true (or the
+   * signature itself confirms in the meantime, in which case we report
+   * that as a real success instead of retrying).
+   */
+  async function _waitForSafeRetry(signature, blockhash) {
+    const start = Date.now();
+    const SAFE_RETRY_TIMEOUT_MS = 90_000; // generous — blockhashes expire well within this
+    while (Date.now() - start < SAFE_RETRY_TIMEOUT_MS) {
+      // Did it actually land while we were waiting? Don't retry — it succeeded.
+      const statusResult = await _rpc('getSignatureStatuses', [[signature], { searchTransactionHistory: true }]);
+      const status = statusResult?.value?.[0];
+      if (status && !status.err && (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized')) {
+        return { landedLate: true };
+      }
+      const validResult = await _rpc('isBlockhashValid', [blockhash, { commitment: 'confirmed' }]);
+      const stillValid = validResult?.value ?? validResult;
+      if (!stillValid) {
+        // Blockhash is expired — the original transaction can now never land. Safe to retry.
+        return { landedLate: false, safeToRetry: true };
+      }
+      await new Promise(r => setTimeout(r, CONFIRM_POLL_MS));
+    }
+    // Extremely unlikely to hit this, but fail safe: don't retry if we can't confirm expiry.
+    return { landedLate: false, safeToRetry: false };
+  }
+
+  /**
    * Executes a real payment: build the transaction, sign with
    * Phantom, submit via the Smart TX Stack, confirm on-chain. On
    * failure or timeout, asks the Groq retry agent whether to try
@@ -157,10 +188,43 @@ const VeilEngine = (() => {
         };
       }
 
-      lastError = outcome.failed ? `Transaction failed on-chain: ${JSON.stringify(outcome.err)}` : 'Confirmation timed out';
+      // On a hard on-chain failure (not a timeout), it's already safe to retry —
+      // the transaction is confirmed dead, it can't land later.
+      if (outcome.failed) {
+        lastError = `Transaction failed on-chain: ${JSON.stringify(outcome.err)}`;
+        const decision = await SmartTX.reasonAboutFailure(
+          { signature, failure_type: 'BundleExecutionFailure', retry_count: attempt - 1, tip_paid_lamports: tipLamports },
+          { congestion_level: 'MEDIUM', recent_avg_confirmation_ms: CONFIRM_TIMEOUT_MS, recent_failure_rate: 0.15 },
+        );
+        if (decision.should_retry && attempt <= MAX_RETRIES) { urgency = 'CRITICAL'; continue; }
+        throw new Error(lastError);
+      }
+
+      // Confirmation timed out — this does NOT mean it failed. It could still
+      // land. Never submit a second transaction until we're certain the first
+      // one can no longer confirm (blockhash expired).
+      onProgress?.('transferring'); // stays on the same step — still safeguarding, not a new attempt yet
+      const safety = await _waitForSafeRetry(signature, blockhash);
+      if (safety.landedLate) {
+        return {
+          txHash: signature,
+          status: 'confirmed',
+          success: true,
+          simulated: false,
+          feeBaseUnits,
+          tipLamports,
+          usedFallback: submission.usedFallback || false,
+          explorerUrl: `https://solscan.io/tx/${signature}`,
+        };
+      }
+      if (!safety.safeToRetry) {
+        throw new Error('Payment status is unclear — please check your wallet history before trying again to avoid a double payment.');
+      }
+
+      lastError = 'Confirmation timed out';
       const decision = await SmartTX.reasonAboutFailure(
-        { signature, failure_type: outcome.timedOut ? 'Timeout' : 'BundleExecutionFailure', retry_count: attempt - 1, tip_paid_lamports: tipLamports },
-        { congestion_level: outcome.timedOut ? 'HIGH' : 'MEDIUM', recent_avg_confirmation_ms: CONFIRM_TIMEOUT_MS, recent_failure_rate: 0.15 },
+        { signature, failure_type: 'Timeout', retry_count: attempt - 1, tip_paid_lamports: tipLamports },
+        { congestion_level: 'HIGH', recent_avg_confirmation_ms: CONFIRM_TIMEOUT_MS, recent_failure_rate: 0.15 },
       );
       if (decision.should_retry && attempt <= MAX_RETRIES) { urgency = 'CRITICAL'; continue; }
       throw new Error(lastError);
