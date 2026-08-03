@@ -323,12 +323,13 @@
     function setStepState(stepId, spinnerId, state) {
       const row = document.getElementById(stepId);
       const spinner = document.getElementById(spinnerId);
+      if (!row) return; // step row not found — nothing to update
       row.classList.remove('active', 'done');
-      spinner.style.display = 'none';
+      if (spinner) spinner.style.display = 'none'; // spinner may already be gone if this step already completed once
       const icon = row.querySelector('.step-icon');
       if (state === 'active') {
         row.classList.add('active');
-        spinner.style.display = 'block';
+        if (spinner) spinner.style.display = 'block';
       } else if (state === 'done') {
         row.classList.add('done');
         icon.innerHTML = '<svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#10b981" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
@@ -345,6 +346,7 @@
       }
 
       showState('stateProcessing');
+      let depositStepDone = false;
       document.getElementById('stepDeposit').querySelector('.step-icon').innerHTML = '<div class="step-spinner" id="depositSpinner" style="display:none;"></div>';
       document.getElementById('stepTransfer').querySelector('.step-icon').innerHTML = '<div class="step-spinner" id="transferSpinner" style="display:none;"></div>';
 
@@ -356,7 +358,8 @@
           amount:          currentInvoice.amount,
           onProgress(stage) {
             if (stage === 'depositing') setStepState('stepDeposit', 'depositSpinner', 'active');
-            if (stage === 'transferring') {
+            if (stage === 'transferring' && !depositStepDone) {
+              depositStepDone = true;
               setStepState('stepDeposit', 'depositSpinner', 'done');
               setStepState('stepTransfer', 'transferSpinner', 'active');
             }
