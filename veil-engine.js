@@ -139,7 +139,11 @@ const VeilEngine = (() => {
     const phantom = _getPhantom();
     if (!phantom) throw new Error('Wallet not connected.');
 
-    let urgency = 'MEDIUM';
+    // Start at HIGH (p75 landed-tip), not MEDIUM (p50). p50 means half of
+    // recently landed bundles needed MORE than this to land — a coin flip
+    // isn't good enough for a payment. The tip itself is fractions of a
+    // cent; the cost of losing another real test payment is not.
+    let urgency = 'HIGH';
     let attempt = 0;
     let lastError = null;
 
