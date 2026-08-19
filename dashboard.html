@@ -757,16 +757,16 @@
       document.getElementById('subAmount').value = '';
     }
 
-    window.handleDisputeInvoice = function(id) {
+    window.handleDisputeInvoice = async function(id) {
       const reason = prompt('Reason for dispute (optional):') || '';
-      VeilPay.flagDispute(id, reason);
+      await VeilPay.flagDispute(id, reason);
       renderInvoiceList();
       updateStats();
       VeilPay.showToast('Invoice marked as disputed.', 'amber');
     };
 
-    window.handleResolveDispute = function(id) {
-      VeilPay.resolveDispute(id);
+    window.handleResolveDispute = async function(id) {
+      await VeilPay.resolveDispute(id);
       renderInvoiceList();
       updateStats();
       VeilPay.showToast('Dispute resolved.', 'green');

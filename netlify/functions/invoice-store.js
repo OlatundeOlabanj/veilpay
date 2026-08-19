@@ -10,8 +10,25 @@ const { getStore } = require('@netlify/blobs');
 // to update afterward (used when marking an invoice as paid/disputed).
 const MUTABLE_FIELDS = ['status', 'txHash', 'depositTxHash', 'paidAt', 'disputeReason'];
 
+// Netlify Blobs' automatic environment detection (siteID/token injected
+// implicitly) isn't reliable across every invocation context — it threw
+// MissingBlobsEnvironmentError in production on Aug 18 despite this being
+// a normal synchronous function on the main branch. Passing siteID/token
+// explicitly, as the error itself instructs, sidesteps that entirely.
+function getInvoiceStore() {
+  const siteID = process.env.NETLIFY_BLOBS_SITE_ID || process.env.SITE_ID;
+  const token = process.env.NETLIFY_BLOBS_TOKEN;
+  if (siteID && token) {
+    return getStore({ name: 'veilpay-invoices', siteID, token });
+  }
+  // Fall back to automatic detection if explicit env vars aren't set yet —
+  // keeps this working today, will just throw the same clear error again
+  // if auto-detection fails until the env vars below are added.
+  return getStore('veilpay-invoices');
+}
+
 exports.handler = async function (event) {
-  const store = getStore('veilpay-invoices');
+  const store = getInvoiceStore();
   const headers = { 'Content-Type': 'application/json' };
 
   if (event.httpMethod === 'POST') {

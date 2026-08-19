@@ -21,7 +21,7 @@ function generateUUID() {
 const INVOICE_PREFIX = 'veilpay_invoice_';
 const INVOICE_INDEX  = 'veilpay_invoice_index';
 
-function saveInvoice(invoice) {
+async function saveInvoice(invoice) {
   try {
     localStorage.setItem(`${INVOICE_PREFIX}${invoice.id}`, JSON.stringify(invoice));
     // Maintain an index of invoice IDs
@@ -31,13 +31,21 @@ function saveInvoice(invoice) {
       localStorage.setItem(INVOICE_INDEX, JSON.stringify(index));
     }
     // Write-through to the real backend so the invoice is retrievable
-    // from any device, not just this browser. Fire-and-forget: local
-    // cache above already gives instant UI feedback either way.
-    fetch('/api/invoice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(invoice)
-    }).catch(err => console.error('[VeilPay] Failed to sync invoice to server:', err));
+    // from any device, not just this browser. Awaited (not fire-and-forget)
+    // so a caller that needs ordering guarantees — e.g. updateInvoiceStatus
+    // right after invoice creation on the same device — can be sure this
+    // write actually landed before firing the next one. Without this, a
+    // slow "create" write could land on the server AFTER a fast "mark as
+    // paid" write and silently revert the invoice back to pending.
+    try {
+      await fetch('/api/invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(invoice)
+      });
+    } catch (err) {
+      console.error('[VeilPay] Failed to sync invoice to server:', err);
+    }
     return true;
   } catch (err) {
     console.error('[VeilPay] Failed to save invoice:', err);
@@ -430,8 +438,8 @@ document.addEventListener('keydown', e => {
 
 // ─── Dispute Flag ─────────────────────────────────────────────────────────────
 
-function flagDispute(id, reason) {
-  const invoice = getInvoice(id);
+async function flagDispute(id, reason) {
+  const invoice = await getInvoice(id);
   if (!invoice) return false;
   invoice.disputed = true;
   invoice.disputeReason = reason || 'No reason provided';
@@ -440,8 +448,8 @@ function flagDispute(id, reason) {
   return saveInvoice(invoice);
 }
 
-function resolveDispute(id) {
-  const invoice = getInvoice(id);
+async function resolveDispute(id) {
+  const invoice = await getInvoice(id);
   if (!invoice) return false;
   invoice.disputed = false;
   invoice.disputeReason = null;
